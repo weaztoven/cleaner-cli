@@ -1,24 +1,25 @@
 # 🧹 cleaner-cli
 
-Ein schnelles und leichtes CLI-Tool in Rust, um unnötige Ordner wie `node_modules`, `target`, `.cache` und `dist` zu finden und zu bereinigen.
+A fast and lightweight Rust CLI tool to find and clean up heavy, unnecessary development folders like node_modules, target, .cache, and dist.
 
 ---
 
 ### 🚀 Features
 
-- 🔍 **Schneller Scan:** Rekursive Suche nach Entwickler-Müll.
-- 📊 **Speicher-Analyse:** Zeigt den freizugebenden Speicherplatz in KB/MB/GB an.
-- 🛡️ **Sicherheitsmodus:** Standardmäßig wird nur simuliert. Gelöscht wird erst mit dem Flag `--execute`.
-- ⚡ **Rust Performance:** Maximale Geschwindigkeit bei minimaler Ressourcennutzung.
+- 🔍 Fast Scanning: Recursively searches for deep developer junk across directories.
+- 📊 Storage Analysis: Displays total disk space to be reclaimed in KB/MB/GB.
+- 🛡️ Safety Mode: Runs in dry-run/simulation mode by default. No files are removed without the --execute flag.
+- ⚡ Rust Performance: Blazing fast execution with minimal memory footprint.
 
 ---
 
-### 📦 Installation & Nutzung
+### 📦 Installation & Usage
 
-1. **Repository klonen:**
-   ```bash
-   git clone [https://github.com/weaztoven/cleaner-cli.git](https://github.com/weaztoven/cleaner-cli.git)
+1. Clone the Repository:
+   ```bash 
+   git clone https://github.com/weaztoven/cleaner-cli.git
    cd cleaner-cli
-2. **Cargo Install:**
-   ```bash
-   cargo install cleaner-cli
+
+3. Install via Cargo:
+   ```bash 
+   cargo install --path .
