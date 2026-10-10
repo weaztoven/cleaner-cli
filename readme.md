@@ -19,3 +19,6 @@ Ein schnelles und leichtes CLI-Tool in Rust, um unnötige Ordner wie `node_modul
    ```bash
    git clone [https://github.com/weaztoven/cleaner-cli.git](https://github.com/weaztoven/cleaner-cli.git)
    cd cleaner-cli
+2. **Cargo Install:**
+   ```bash
+   cargo install cleaner-cli
