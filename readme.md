@@ -22,4 +22,4 @@ A fast and lightweight Rust CLI tool to find and clean up heavy, unnecessary dev
 
 3. Install via Cargo:
    ```bash 
-   cargo install --path .
+   cargo install cleaner-cli
