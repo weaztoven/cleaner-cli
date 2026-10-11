@@ -1,6 +1,6 @@
 [package]
 name = "cleaner-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["weaztoven"]
 description = "A fast and lightweight CLI tool in Rust to find and clean developer junk like node_modules, target, and dist."

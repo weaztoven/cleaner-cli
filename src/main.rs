@@ -1,153 +1,137 @@
-use clap::Parser;
-use colored::*;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
+use std::time::Instant;
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Hauptverzeichnis, das durchsucht und bereinigt werden soll
-    #[arg(short, long, default_value = ".")]
-    path: String,
+const TARGET_DIRS: &[&str] = &["node_modules", "target", ".cache", "dist"];
 
-    /// Tatsächlich löschen (falls nicht angegeben, wird nur gescannt und die Größe angezeigt)
-    #[arg(short, long)]
-    execute: bool,
+struct CleanupItem {
+    path: PathBuf,
 }
-
-// Ziel-Ordner, die für die Bereinigung vorgesehen sind
-const TARGET_DIRS: &[&str] = &[
-    "node_modules",
-    "target",
-    ".cache",
-    "dist",
-    "build",
-    ".next",
-    "__pycache__",
-];
 
 fn main() {
-    let args = Args::parse();
-    let root_path = Path::new(&args.path);
+    let args: Vec<String> = std::env::args().collect();
+    let execute_mode = args.iter().any(|arg| arg == "--execute");
+    let export_report = args.iter().any(|arg| arg == "--report");
 
-    if !root_path.exists() {
-        println!("{}", "Fehler: Das angegebene Verzeichnis wurde nicht gefunden!".red());
-        return;
-    }
-
-    let absolute_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
+    let current_dir = std::env::current_dir().expect("Failed to get current directory!");
     
-    // Windows \\?\ prefix temizliği
-    let path_str = absolute_path.to_string_lossy();
-    let clean_path = if path_str.starts_with(r"\\?\") {
-        &path_str[4..]
+    println!("🧹 cleaner-cli - Development Junk Cleaner\n");
+    println!("🔍 Scanning directory: {}", current_dir.display());
+    
+    if !execute_mode {
+        println!("🛡️  SAFETY MODE (Dry-run): No files will be deleted. Use '--execute' to delete.\n");
     } else {
-        &path_str
-    };
-
-    println!(
-        "{} Suche läuft in: {}",
-        "🔍".bold(),
-        clean_path.cyan()
-    );
-
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-            .template("{spinner:.green} Ordner werden durchsucht... ({elapsed})")
-            .unwrap(),
-    );
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-
-    let mut found_targets: Vec<PathBuf> = Vec::new();
-
-    // Verzeichnisse rekursiv durchsuchen
-    for entry in WalkDir::new(root_path)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        if entry.file_type().is_dir() {
-            if let Some(dir_name) = entry.file_name().to_str() {
-                if TARGET_DIRS.contains(&dir_name) {
-                    found_targets.push(entry.path().to_path_buf());
-                }
-            }
-        }
+        println!("⚠️  WARNING: --execute is active. Found folders will be processed for deletion!\n");
     }
 
-    pb.finish_and_clear();
+    let start_time = Instant::now();
+    let mut found_items = Vec::new();
 
-    if found_targets.is_empty() {
-        println!("{}", "✨ Keine zu bereinigenden Zielordner gefunden!".green());
+    search_targets(&current_dir, &mut found_items);
+
+    if found_items.is_empty() {
+        println!("✨ No target folders found!");
         return;
     }
 
-    println!("\nGefundene Zielordner:");
     let mut total_size: u64 = 0;
+    let mut processed_count = 0;
 
-    for path in &found_targets {
-        let dir_size = calculate_dir_size(path);
-        total_size += dir_size;
-        println!(
-            "  - {} ({})",
-            path.display().to_string().yellow(),
-            format_size(dir_size).bright_black()
-        );
+    for item in &found_items {
+        let size = dir_size(&item.path);
+        total_size += size;
+        processed_count += 1;
+
+        let size_mb = size as f64 / 1024.0 / 1024.0;
+        println!("📁 Found: {} ({:.2} MB)", item.path.display(), size_mb);
     }
 
-    println!(
-        "\nInsgesamt freizugebender Speicherplatz: {}",
-        format_size(total_size).green().bold()
-    );
+    let total_mb = total_size as f64 / 1024.0 / 1024.0;
+    let total_gb = total_mb / 1024.0;
 
-    if args.execute {
-        println!("\n{} Bereinigung wird gestartet...", "🚀".bold());
-        for path in found_targets {
-            match fs::remove_dir_all(&path) {
-                Ok(_) => println!("  Gelöscht: {}", path.display()),
-                Err(e) => eprintln!("  Konnte nicht gelöscht werden {}: {}", path.display(), e),
+    // --- ONAY MEKANİZMASI ---
+    if execute_mode {
+        print!("\n⚠️  Are you sure you want to permanently delete these {} folders ({:.2} MB)? [y/N]: ", processed_count, total_mb);
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let choice = input.trim().to_lowercase();
+
+        if choice != "y" && choice != "yes" {
+            println!("❌ Operation cancelled by user.");
+            return;
+        }
+
+        println!("\n🗑️ Starting deletion process...");
+        for item in &found_items {
+            match fs::remove_dir_all(&item.path) {
+                Ok(_) => println!("   └─ Deleted: {}", item.path.display()),
+                Err(e) => eprintln!("   └─ Failed to delete {}: {}", item.path.display(), e),
             }
         }
-        println!("{}", "✨ Bereinigung abgeschlossen!".green().bold());
+    }
+
+    let elapsed = start_time.elapsed();
+
+    // --- REPORT SUMMARY ---
+    println!("\n{}", "═".repeat(50));
+    println!("📊 CLEANUP EXECUTION REPORT");
+    println!("{}", "═".repeat(50));
+    println!("⏱️  Duration      : {:.2?}", elapsed);
+    println!("📦 Target Folders: {}", processed_count);
+    if total_gb >= 1.0 {
+        println!("💾 Reclaimable Space: {:.2} GB ({:.2} MB)", total_gb, total_mb);
     } else {
-        println!(
-            "\n{}",
-            "ℹ️ Löschvorgang simuliert. Um tatsächlich zu löschen, füge das Flag '--execute' oder '-e' hinzu."
-                .cyan()
+        println!("💾 Reclaimable Space: {:.2} MB", total_mb);
+    }
+    println!("⚙️  Mode          : {}", if execute_mode { "Executed (Deleted)" } else { "Dry-run (Simulated)" });
+    println!("{}", "═".repeat(50));
+
+    if export_report {
+        let report_content = format!(
+            "Cleaner-CLI Report\nTime: {:.2?}\nFolders: {}\nTotal Size: {:.2} MB\nMode: {}\n",
+            elapsed, processed_count, total_mb, if execute_mode { "Executed" } else { "Dry-run" }
         );
+        if let Err(e) = fs::write("cleaner-report.txt", report_content) {
+            eprintln!("❌ Failed to save report file: {}", e);
+        } else {
+            println!("📄 Report successfully saved to 'cleaner-report.txt'");
+        }
     }
 }
 
-// Hilfsfunktion zur Berechnung der Ordnergröße
-fn calculate_dir_size(path: &Path) -> u64 {
+fn search_targets(dir: &Path, found: &mut Vec<CleanupItem>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if TARGET_DIRS.contains(&dir_name) {
+                        found.push(CleanupItem { path: path.clone() });
+                        continue; 
+                    }
+                }
+                search_targets(&path, found);
+            }
+        }
+    }
+}
+
+fn dir_size(path: &Path) -> u64 {
     let mut size = 0;
-    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            if let Ok(metadata) = entry.metadata() {
-                size += metadata.len();
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                if let Ok(metadata) = p.metadata() {
+                    size += metadata.len();
+                }
+            } else if p.is_dir() {
+                size += dir_size(&p);
             }
         }
     }
     size
-}
-
-// Konvertiert Dateigrößen in ein lesbares Format (Byte -> KB/MB/GB)
-fn format_size(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = KB * 1024;
-    const GB: u64 = MB * 1024;
-
-    if bytes >= GB {
-        format!("{:.2} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.2} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.2} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{} Bytes", bytes)
-    }
 }
