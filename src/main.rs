@@ -50,7 +50,6 @@ fn main() {
     let total_mb = total_size as f64 / 1024.0 / 1024.0;
     let total_gb = total_mb / 1024.0;
 
-    // --- ONAY MEKANİZMASI ---
     if execute_mode {
         print!("\n⚠️  Are you sure you want to permanently delete these {} folders ({:.2} MB)? [y/N]: ", processed_count, total_mb);
         io::stdout().flush().unwrap();
@@ -75,7 +74,6 @@ fn main() {
 
     let elapsed = start_time.elapsed();
 
-    // --- REPORT SUMMARY ---
     println!("\n{}", "═".repeat(50));
     println!("📊 CLEANUP EXECUTION REPORT");
     println!("{}", "═".repeat(50));
