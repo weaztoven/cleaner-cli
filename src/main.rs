@@ -39,7 +39,7 @@ fn main() {
 
     let absolute_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
     
-    // Windows \\?\ prefix temizliği
+    // Windows \\?\ Präfixreinigung
     let path_str = absolute_path.to_string_lossy();
     let clean_path = if path_str.starts_with(r"\\?\") {
         &path_str[4..]
