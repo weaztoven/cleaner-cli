@@ -1,3 +1,4 @@
+![Demo](demo.gif)
 <div align="center">
 
 # 🧹 cleaner-cli
